@@ -20,8 +20,8 @@
 
 import requests
 
-USERNAME = ''
-PASSWORD = ''
+username = ''
+password = ''
 
 channel = ''
 title = ''
@@ -31,79 +31,84 @@ protocol = 'https'
 domain = 'bitchute.com'
 www_server = '{0}://www.{1}'.format(protocol, domain)
 
-session = requests.Session()
+def upload(username, password, channel, title, description, video_path, thumbnail_path):
+    session = requests.Session()
 
-csrftoken = session.get(www_server + '/').cookies['csrftoken']
+    csrftoken = session.get(www_server + '/').cookies['csrftoken']
 
-r = session.post(www_server + '/accounts/login/',
-    data={
-        'username': USERNAME, 
-        'password': PASSWORD,
-        'csrfmiddlewaretoken': csrftoken
-    },
-    headers={'referer': www_server + '/'})
-
-if r.json()['success'] != True:
-    raise RuntimeError('Login failed')
-
-r = session.get('{0}/channel/{1}/upload/?'.format(www_server, channel))
-upload_url = r.url
-upload_server = '/'.join(r.url.split('/')[0:3])
-query_string = {k:v for k, v in [kv.split('=') for kv in r.url.split('?')[1].split('&')]}
-upload_code = query_string['upload_code']
-cid = query_string['cid']
-cdid = query_string['cdid']
-
-csrftoken = r.cookies['csrftoken']
-
-r = session.post(upload_server + '/videos/uploadmeta/',
-    data={
-        'upload_title': title,
-        'upload_description': description,
-        'upload_code': upload_code,
-        'csrfmiddlewaretoken': csrftoken
-    },
-    headers={'referer': upload_url})
-
-if r.status_code != 200:
-    raise RuntimeError('Upload of title and description failed')
-
-def upload(file, type, mime_type):
-    return session.post(upload_server + '/videos/upload/',
+    r = session.post(www_server + '/accounts/login/',
         data={
-            'upload_type': type,
-            'upload_code': upload_code,
+            'username': username,
+            'password': password,
             'csrfmiddlewaretoken': csrftoken
         },
-        files={
-            'file': (file, open(file, 'rb'), mime_type)
-        },
-        headers={'referer': upload_url})
+        headers={'referer': www_server + '/'})
 
-print('Upload video...')
-r = upload('test.mp4', 'video', 'video/mp4')
-if r.status_code != 200:
-    raise RuntimeError('Upload of video failed')
+    if r.json()['success'] != True:
+        raise RuntimeError('Login failed')
 
-print('Upload thumbnail...')
-r = upload('test.jpg', 'image', 'image/jpeg')
-if r.status_code != 200:
-    raise RuntimeError('Upload of thumbnail failed')
+    r = session.get('{0}/channel/{1}/upload/?'.format(www_server, channel))
+    upload_url = r.url
+    upload_server = '/'.join(r.url.split('/')[0:3])
+    query_string = {k:v for k, v in [kv.split('=') for kv in r.url.split('?')[1].split('&')]}
+    upload_code = query_string['upload_code']
+    cid = query_string['cid']
+    cdid = query_string['cdid']
 
-print('Finish upload...')
-r = session.post(upload_server + '/videos/finish_upload/',
-        params={
-            'cdid': cdid,
-            'channel': channel,
-            'cid': cid,
-            'upload_code': upload_code,
-        },
+    csrftoken = r.cookies['csrftoken']
+
+    r = session.post(upload_server + '/videos/uploadmeta/',
         data={
+            'upload_title': title,
+            'upload_description': description,
+            'upload_code': upload_code,
             'csrfmiddlewaretoken': csrftoken
         },
         headers={'referer': upload_url})
 
-if r.status_code != 200:
-    raise RuntimeError('Failed to finish submission')
+    if r.status_code != 200:
+        raise RuntimeError('Upload of title and description failed')
 
-print(r.url)
+    def _post_file(file, type, mime_type):
+        return session.post(upload_server + '/videos/upload/',
+            data={
+                'upload_type': type,
+                'upload_code': upload_code,
+                'csrfmiddlewaretoken': csrftoken
+            },
+            files={
+                'file': (file, open(file, 'rb'), mime_type)
+            },
+            headers={'referer': upload_url})
+
+    print('Upload video...')
+    r = _post_file(video_path, 'video', 'video/mp4')
+    if r.status_code != 200:
+        raise RuntimeError('Upload of video failed')
+
+    print('Upload thumbnail...')
+    r = _post_file(thumbnail_path, 'image', 'image/jpeg')
+    if r.status_code != 200:
+        raise RuntimeError('Upload of thumbnail failed')
+
+    print('Finish upload...')
+    r = session.post(upload_server + '/videos/finish_upload/',
+            params={
+                'cdid': cdid,
+                'channel': channel,
+                'cid': cid,
+                'upload_code': upload_code,
+            },
+            data={
+                'csrfmiddlewaretoken': csrftoken
+            },
+            headers={'referer': upload_url})
+
+    if r.status_code != 200:
+        raise RuntimeError('Failed to finish submission')
+
+    print(r.url)
+
+
+upload(username=username, password=password, channel=channel, title=title, description=description,
+    video_path='test.mp4', thumbnail_path='test.jpg')
