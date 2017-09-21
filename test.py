@@ -18,6 +18,7 @@
 ## along with this program; if not, see <http://www.gnu.org/licenses/>.
 ##
 
+import re
 import requests
 
 username = ''
@@ -47,22 +48,32 @@ def upload(username, password, channel, title, description, video_path, thumbnai
     if r.json()['success'] != True:
         raise RuntimeError('Login failed')
 
-    r = session.get('{0}/channel/{1}/upload/?'.format(www_server, channel))
+    r = session.get('{0}/channel/{1}/'.format(www_server, channel))
+    if r.status_code != 200:
+        raise RuntimeError('Failed to get channel profile page')
+    m = re.search('/channel/([A-Za-z0-9]+)/upload/', r.text)
+    if not m:
+        raise RuntimeError('Couldn\'t find channel code')
+    cdid = m.group(1)
+
+    r = session.get('{0}/channel/{1}/upload/?'.format(www_server, cdid))
     upload_url = r.url
     upload_server = '/'.join(r.url.split('/')[0:3])
     query_string = {k:v for k, v in [kv.split('=') for kv in r.url.split('?')[1].split('&')]}
     upload_code = query_string['upload_code']
     cid = query_string['cid']
-    cdid = query_string['cdid']
 
-    csrftoken = r.cookies['csrftoken']
+    m = re.search("name='csrfmiddlewaretoken' value='([A-Za-z0-9]+)'", r.text)
+    if not m:
+        raise RuntimeError('Couldn\'t find csrfmiddlewaretoken')
+    csrfmiddlewaretoken = m.group(1)
 
     r = session.post(upload_server + '/videos/uploadmeta/',
         data={
             'upload_title': title,
             'upload_description': description,
             'upload_code': upload_code,
-            'csrfmiddlewaretoken': csrftoken
+            'csrfmiddlewaretoken': csrfmiddlewaretoken
         },
         headers={'referer': upload_url})
 
@@ -74,7 +85,7 @@ def upload(username, password, channel, title, description, video_path, thumbnai
             data={
                 'upload_type': type,
                 'upload_code': upload_code,
-                'csrfmiddlewaretoken': csrftoken
+                'csrfmiddlewaretoken': csrfmiddlewaretoken
             },
             files={
                 'file': (file, open(file, 'rb'), mime_type)
@@ -100,7 +111,7 @@ def upload(username, password, channel, title, description, video_path, thumbnai
                 'upload_code': upload_code,
             },
             data={
-                'csrfmiddlewaretoken': csrftoken
+                'csrfmiddlewaretoken': csrfmiddlewaretoken
             },
             headers={'referer': upload_url})
 
